@@ -2,6 +2,25 @@ module.exports = function(grunt) {
 
   // load all grunt tasks matching the `grunt-*` pattern
   require('load-grunt-tasks')(grunt);
+  var webpack = require('webpack');
+
+  var pkg = grunt.file.readJSON('package.json');
+
+  /**
+   * Simple version conversion to integer
+   * - 0.4.2 becomes 4002
+   * - 0.4.2-dev becomes 4002
+   * - 1.4.2 becomes 1004002
+   */
+  var idbVersion = function(){
+    var version = pkg.version
+      .split('.')
+      .map(function(num){
+        return(1e15+ parseInt( num, 10 ) +"").slice(-3)
+      })
+      .join('');
+    return parseInt( version, 10 );
+  }
 
   grunt.initConfig({
     pkg: grunt.file.readJSON('package.json'),
@@ -28,10 +47,13 @@ module.exports = function(grunt) {
         '!package.json',
         '!locales.json',
         '!phpunit.xml',
+        '!phpunit.xml.dist',
+        '!phpunit.int.xml',
         '!pioneer.json',
         '!<%= app.css.src %>/**',
         '!<%= app.js.src %>/**',
-        '!README.md'
+        '!README.md',
+        '!coverage/**'
       ]
     },
 
@@ -48,7 +70,8 @@ module.exports = function(grunt) {
         files: [
           '<%= app.css.src %>/pos.css',
           '<%= app.css.src %>/admin.css',
-          '<%= app.css.src %>/icons.css'
+          '<%= app.css.src %>/icons.css',
+          '<%= app.css.src %>/admin-icons.css'
         ],
         tasks: ['cssmin']
       },
@@ -101,7 +124,8 @@ module.exports = function(grunt) {
         files: {
           'assets/css/pos.min.css': ['assets/css/src/pos.css'],
           'assets/css/admin.min.css':['assets/css/src/admin.css'],
-          'assets/css/icons.min.css':['assets/css/src/icons.css']
+          'assets/css/icons.min.css':['assets/css/src/icons.css'],
+          'assets/css/admin-icons.min.css':['assets/css/src/admin-icons.css']
         }
       }
     },
@@ -139,6 +163,11 @@ module.exports = function(grunt) {
             { test: /\.hbs$/, loader: 'raw-loader' }
           ]
         },
+        plugins: [
+          new webpack.DefinePlugin({
+            __VERSION__: JSON.stringify( idbVersion() )
+          })
+        ],
         resolve: {
           alias: {
             marionette: 'backbone.marionette',
@@ -207,7 +236,7 @@ module.exports = function(grunt) {
             'node_modules/backbone.radio/build/backbone.radio.js',
             'node_modules/backbone.marionette/lib/backbone.marionette.js',
             'node_modules/handlebars/dist/handlebars.js',
-            'node_modules/idb-wrapper/idbstore.js',
+            //'node_modules/idb-wrapper/idbstore.js',
             'node_modules/select2/select2.js',
             'node_modules/moment/moment.js',
             'node_modules/accounting/accounting.js',
@@ -311,7 +340,7 @@ module.exports = function(grunt) {
       }
     },
 
-    // tests
+    //tests
     simplemocha: {
       options: {
         globals: ['should'],
@@ -328,6 +357,21 @@ module.exports = function(grunt) {
           'tests/unit/js/setup/helpers.js',
           'tests/unit/js/spec/**/*.spec.js'
         ]
+      }
+    },
+
+    mocha_istanbul: {
+      coverage: {
+        src: [
+          'tests/unit/js/setup/node.js',
+          'tests/unit/js/setup/helpers.js',
+          'tests/unit/js/spec/**/*.spec.js'
+        ],
+        options: {
+          coverage: true,
+          root: './assets/js/src',
+          reportFormats: ['lcovonly']
+        }
       }
     },
 
@@ -386,6 +430,19 @@ module.exports = function(grunt) {
         force: true
       },
       deploy: ['<%= app.tmp %>']
+    },
+
+    phpunit: {
+      unit: {
+        options: {
+          configuration: 'phpunit.xml'
+        }
+      },
+      integration: {
+        options: {
+          configuration: 'phpunit.int.xml'
+        }
+      }
     }
 
   });
@@ -398,6 +455,9 @@ module.exports = function(grunt) {
 
   // deploy
   grunt.registerTask('deploy', 'Production build', ['test', 'makepot', 'webpack:deploy', 'js_locales', 'uglify', 'copy', 'compress', 'clean']);
+
+  // coverage
+  grunt.registerTask('coverage', ['mocha_istanbul']);
 
   // default = test
   grunt.registerTask('default', ['test']);
@@ -417,6 +477,15 @@ module.exports = function(grunt) {
 
     grunt.config('uglify.js_locales', { 'files': files } );
     grunt.task.run('uglify:js_locales');
+  });
+
+  grunt.event.on('coverage', function(lcov, done){
+    require('coveralls').handleInput(lcov, function(err){
+      if (err) {
+        return done(err);
+      }
+      done();
+    });
   });
 
 };

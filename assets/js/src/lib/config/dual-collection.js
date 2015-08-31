@@ -308,6 +308,21 @@ module.exports = POS.DualCollection = IDBCollection.extend({
     }) || this.delay;
   },
 
+  /**
+   * Clears the IDB storage and resets the collection
+   */
+  clear: function(){
+    if(!this.db){
+      return;
+    }
+
+    var self = this;
+    return IDBCollection.prototype.clear.call(this)
+      .then(function(){
+        self.queue = [];
+      });
+  },
+
   /*
    * Helper function to format Date.now() to RFC3339
    * - returns 2015-03-11T02:30:43.925Z (with milliseconds)

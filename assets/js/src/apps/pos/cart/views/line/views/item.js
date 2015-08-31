@@ -6,6 +6,7 @@ var AutoGrow = require('lib/behaviors/autogrow');
 var Numpad = require('lib/components/numpad/behavior');
 var hbs = require('handlebars');
 var $ = require('jquery');
+var _ = require('lodash');
 
 module.exports = FormView.extend({
   template: hbs.compile( $('#tmpl-cart-item').html() ),
@@ -35,11 +36,13 @@ module.exports = FormView.extend({
 
   ui: {
     remove  : '*[data-action="remove"]',
-    more    : '*[data-action="more"]'
+    more    : '*[data-action="more"]',
+    title   : '.title'
   },
 
   events: {
-    'click @ui.remove': 'removeItem'
+    'click @ui.remove': 'removeItem',
+    'click @ui.title': 'focusTitle'
   },
 
   triggers: {
@@ -59,7 +62,21 @@ module.exports = FormView.extend({
       },
       onSet: Utils.unformat
     },
-    '*[data-name="title"]': 'title',
+    '*[data-name="title"]' : {
+      observe: 'title',
+      events: ['blur']
+    },
+    'dl.meta': {
+      observe: 'meta',
+      updateMethod: 'html',
+      onGet: function(val){
+        var row = '';
+        _.each(val, function(meta){
+          row += '<dt>' + meta.label + ':</dt><dd>' + meta.value + '</dd>';
+        });
+        return row;
+      }
+    },
     '*[data-name="method_title"]': 'method_title',
     'input[name="item_price"]': {
       observe: 'item_price',
@@ -88,6 +105,7 @@ module.exports = FormView.extend({
   },
 
   save: function(){
+    console.log(arguments);
     this.model.save();
   },
 
@@ -99,6 +117,10 @@ module.exports = FormView.extend({
       .fadeOut(500, function(){
       self.model.destroy();
     });
+  },
+
+  focusTitle: function(){
+    this.ui.title.find('strong').focus();
   }
 
 });

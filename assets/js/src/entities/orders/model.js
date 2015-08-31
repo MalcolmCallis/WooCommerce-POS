@@ -81,13 +81,13 @@ var Model = DualModel.extend({
   /**
    * Remove items from cart before destroy
    */
-  //destroy: function(options){
-  //  var self = this;
-  //  return this.cart.db.removeBatch( this.cart.pluck('local_id') )
-  //    .always(function(){
-  //      return DualModel.prototype.destroy.call(self, options);
-  //    });
-  //},
+  destroy: function(options){
+    var self = this;
+    return this.cart.db.removeBatch( this.cart.pluck('local_id') )
+      .always(function(){
+        return DualModel.prototype.destroy.call(self, options);
+      });
+  },
 
   /**
    * Attach cart
@@ -216,7 +216,8 @@ var Model = DualModel.extend({
         return self.processGateway();
       })
       .then(function(){
-        return self.remoteSync();
+        var method = self.get('id') ? 'update' : 'create';
+        return self.remoteSync(method);
       })
       .then(function(array){
         var model = array[0];

@@ -11,14 +11,19 @@
 
 class WC_POS_Activator {
 
-  public function __construct() {
+  /** @var  main plugin file, eg: woocommerce-pos/woocommerce-pos.php */
+  private $mainfile;
 
-    // wpmu_new_blog
+  /**
+   * @param $file
+   */
+  public function __construct( $file ) {
+    $this->mainfile = $file;
+
+    register_activation_hook( $file, array( $this, 'activate' ) );
     add_action( 'wpmu_new_blog', array( $this, 'activate_new_site' ) );
-
-    // check dependencies
     add_action( 'admin_init', array( $this, 'run_checks' ) );
-
+    add_action( 'init', array( $this, 'rewrite_rules' ) );
   }
 
   /**
@@ -26,18 +31,18 @@ class WC_POS_Activator {
    *
    * @param $network_wide
    */
-  static public function activate( $network_wide ) {
+  public function activate( $network_wide ) {
     if ( function_exists( 'is_multisite' ) && is_multisite() ) {
 
       if ( $network_wide  ) {
 
         // Get all blog ids
-        $blog_ids = self::get_blog_ids();
+        $blog_ids = $this->get_blog_ids();
 
         foreach ( $blog_ids as $blog_id ) {
 
           switch_to_blog( $blog_id );
-          self::single_activate();
+          $this->single_activate();
 
           restore_current_blog();
         }
@@ -63,7 +68,7 @@ class WC_POS_Activator {
     }
 
     switch_to_blog( $blog_id );
-    self::single_activate();
+    $this->single_activate();
     restore_current_blog();
 
   }
@@ -74,7 +79,7 @@ class WC_POS_Activator {
    * - not spam
    * - not deleted
    */
-  static private function get_blog_ids() {
+  private function get_blog_ids() {
 
     global $wpdb;
 
@@ -90,27 +95,35 @@ class WC_POS_Activator {
   /**
    * Fired when the plugin is activated.
    */
-  static public function single_activate() {
-
-    // Add rewrite rules, $this->generate_rewrite_rules not called on activation
-    global $wp_rewrite;
-    $permalink = get_option( 'woocommerce_pos_settings_permalink' );
-    $slug = $permalink && $permalink != '' ? $permalink : 'pos' ;
-    add_rewrite_rule('^'. $slug .'/?$','index.php?pos=1','top');
-    flush_rewrite_rules( false ); // false will not overwrite .htaccess
-
+  public function single_activate() {
     // add pos capabilities
-    self::add_pos_capability();
+    $this->add_pos_capability();
+
+    // add rewrite rules
+    $this->rewrite_rules();
+    flush_rewrite_rules( false );
 
     // set the auto redirection on next page load
-    set_transient( 'woocommere_pos_welcome', 1, 30 );
+    //set_transient( 'woocommere_pos_welcome', 1, 30 );
+  }
+
+  /**
+   * Add rewrite rule to permalinks
+   */
+  public function rewrite_rules() {
+    if( $this->is_deactivating() ) return;
+
+    $option = get_option( 'woocommerce_pos_settings_permalink', 'pos' );
+    $slug = empty($option) ? 'pos' : $option; // make sure slug is not empty
+    add_rewrite_tag('%pos%', '([^&]+)');
+    add_rewrite_rule('^'. $slug .'/?$', 'index.php?pos=1', 'top');
   }
 
   /**
    * add default pos capabilities to administrator and
    * shop_manager roles
    */
-  static private function add_pos_capability(){
+  private function add_pos_capability(){
     $roles = array('administrator', 'shop_manager');
     $caps = array('manage_woocommerce_pos', 'access_woocommerce_pos');
     foreach($roles as $slug) :
@@ -125,16 +138,24 @@ class WC_POS_Activator {
    * Check dependencies
    */
   public function run_checks() {
+    if ( defined( 'DOING_AJAX' ) && DOING_AJAX )
+      return;
+
+    if( ! current_user_can( 'activate_plugins' ) )
+      return;
+
     $this->version_check();
-    $this->woocommerce_check();
-    $this->wc_api_check();
-    $this->permalink_check();
+
+    if( $this->woocommerce_check() ){
+      $this->permalink_check();
+    }
+
   }
 
   /**
-   * Check version number, runs every time
+   * Check version number, runs every admin page load
    */
-  public function version_check(){
+  private function version_check(){
     // next check the POS version number
     $old = get_option( 'woocommerce_pos_db_version' );
     if( !$old || version_compare( $old, WC_POS_VERSION, '<' ) ) {
@@ -146,9 +167,9 @@ class WC_POS_Activator {
   /**
    * Upgrade database
    */
-  public function db_upgrade( $old, $current ) {
+  private function db_upgrade( $old, $current ) {
     $db_updates = array(
-//      '0.4' => 'updates/update-0.4.php'
+      '0.4' => 'updates/update-0.4.php'
     );
     foreach ( $db_updates as $version => $updater ) {
       if ( version_compare( $version, $old, '>' ) &&
@@ -159,57 +180,36 @@ class WC_POS_Activator {
   }
 
   /**
-   * Check if WooCommerce is active
+   * WooCommerce POS will not load if WooCommerce is not present
    */
   private function woocommerce_check() {
-    if( ! current_user_can( 'activate_plugins' ) )
-      return;
+    if( class_exists( 'WooCommerce' ) )
+      return true;
 
-    if ( ! class_exists( 'WooCommerce' ) && current_user_can( 'activate_plugins' ) ) {
-
-      // alert the user
-      $error = array (
-        'msg_type'  => 'error',
-        'msg'     => sprintf( __('<strong>WooCommerce POS</strong> requires <a href="%s">WooCommerce</a>. Please <a href="%s">install and activate WooCommerce</a>', 'woocommerce-pos' ), 'http://wordpress.org/plugins/woocommerce/', admin_url('plugins.php') ) . ' &raquo;'
-      );
-      do_action('woocommerce_pos_add_admin_notice', $error);
-    }
-
-  }
-
-  /**
-   * Check if the WC API option is enabled
-   */
-  private function wc_api_check() {
-    if( ! current_user_can( 'manage_woocommerce' ) )
-      return;
-
-    if( get_option( 'woocommerce_api_enabled' ) !== 'yes' && ! isset( $_POST['woocommerce_api_enabled'] ) ) {
-
-      // alert the user
-      $error = array (
-        'msg_type'  => 'error',
-        'msg'     => sprintf( __('<strong>WooCommerce POS</strong> requires the WooCommerce REST API. Please <a href="%s">enable the REST API</a>', 'woocommerce-pos' ), admin_url('admin.php?page=wc-settings') ) . ' &raquo;'
-      );
-      do_action('woocommerce_pos_add_admin_notice', $error);
-
+    if( current_user_can( 'activate_plugins' ) ){
+      $message = sprintf( __('<strong>WooCommerce POS</strong> requires <a href="%s">WooCommerce</a>. Please <a href="%s">install and activate WooCommerce</a>', 'woocommerce-pos' ), 'http://wordpress.org/plugins/woocommerce/', admin_url('plugins.php') ) . ' &raquo;';
+      WC_POS_Admin_Notices::add( $message );
     }
   }
 
   /**
-   * Check if permalinks enabled, WC API needs permalinks
+   * POS Frontend will give 404 if pretty permalinks not active
    */
-  private function permalink_check() {
-    global $wp_rewrite;
-    if( $wp_rewrite->permalink_structure == '' ) {
-
-      // alert the user
-      $error = array (
-        'msg_type'  => 'error',
-        'msg'     => sprintf( __('<strong>WooCommerce REST API</strong> requires <em>pretty</em> permalinks to work correctly. Please <a href="%s">enable permalinks</a>.', 'woocommerce-pos'), admin_url('options-permalink.php') ) . ' &raquo;'
-      );
-      do_action('woocommerce_pos_add_admin_notice', $error);
+  private function permalink_check(){
+    $fail = WC_POS_Status::permalinks_disabled();
+    if( $fail ){
+      $message = $fail['message'] . '. ';
+      $message .= sprintf( '<a href="%s">%s</a>', $fail['buttons'][0]['href'], $fail['buttons'][0]['prompt'] ) . ' &raquo;';
+      WC_POS_Admin_Notices::add( $message );
     }
+  }
+
+  /**
+   * Check if WP in the process of deactivating this plugin
+   */
+  public function is_deactivating(){
+    return isset( $_REQUEST['action'] ) && $_REQUEST['action'] === 'deactivate' &&
+      isset( $_REQUEST['plugin'] ) && $_REQUEST['plugin'] === $this->mainfile;
   }
 
 }

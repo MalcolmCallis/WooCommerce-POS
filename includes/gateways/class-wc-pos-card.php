@@ -60,12 +60,16 @@ class WC_POS_Gateways_Card extends WC_Payment_Gateway {
 
   }
 
+  /**
+   * @param int $order_id
+   * @return array
+   */
   public function process_payment( $order_id ) {
 
     // get order object
     $order = new WC_Order( $order_id );
 
-    $cashback = isset( $_REQUEST['pos-cashback'] ) ? wc_format_decimal( $_REQUEST['pos-cashback'] ) : 0 ;
+    $cashback = isset( $_POST['pos-cashback'] ) ? wc_format_decimal( $_POST['pos-cashback'] ) : 0 ;
 
     if( $cashback !== 0 ) {
 
@@ -109,7 +113,7 @@ class WC_POS_Gateways_Card extends WC_Payment_Gateway {
 
     // construct message
     if( $cashback ) {
-      $message = '<strong>'. __('Cashback', 'woocommerce-pos') .':</strong> ';
+      $message = __('Cashback', 'woocommerce-pos') . ': ';
       $message .= wc_price($cashback);
     }
 

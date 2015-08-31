@@ -2,6 +2,8 @@ var ItemView = require('lib/config/item-view');
 var $ = require('jquery');
 var Tmpl = require('./status.hbs');
 var hbs = require('handlebars');
+var polyglot = require('lib/utilities/polyglot');
+var EmulateHTTP = require('lib/behaviors/emulateHTTP');
 
 module.exports = ItemView.extend({
   tagName: 'ul',
@@ -17,13 +19,18 @@ module.exports = ItemView.extend({
     'click @ui.btn'   : 'buttonClick'
   },
 
-  onRender: function(){
-    this.$el.prepend( $('#tmpl-pos-status').html() );
+  behaviors: {
+    EmulateHTTP: {
+      behaviorClass: EmulateHTTP
+    }
   },
 
   templateHelpers: function(){
-    var data = this.collection.toJSON();
-    return { tests: data };
+    return {
+      'sub-heading': polyglot.t('titles.local-storage'),
+      tests: this.options.tests,
+      storage: this.options.storage
+    };
   },
 
   toggleReport: function(e){

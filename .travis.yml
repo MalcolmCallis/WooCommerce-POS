@@ -1,24 +1,74 @@
 language: php
 
 php:
-    - 5.3
-#    - 5.4
+  - 5.4
+
+addons:
+  hosts:
+    - woopos.dev
 
 env:
-    - WP_VERSION=latest WP_MULTISITE=0
-#    - WP_VERSION=latest WP_MULTISITE=1
-#    - WP_VERSION=3.8 WP_MULTISITE=0
-#    - WP_VERSION=3.8 WP_MULTISITE=1
+  - WP_VERSION=latest WP_MULTISITE=0
+  #    - WP_VERSION=latest WP_MULTISITE=1
+  #    - WP_VERSION=3.8 WP_MULTISITE=0
+  #    - WP_VERSION=3.8 WP_MULTISITE=1
 
 before_install:
   - git submodule update --init --recursive
 
+install:
+  # php libraries
+  - composer require satooshi/php-coveralls:~0.6.1@stable
+  - composer require guzzlehttp/guzzle:~5
+  - composer require 10up/wp_mock:dev-master
+  # install wordpress & woocommerce & test theme
+  - bash tests/unit/php/bin/install-travis-wp-tests.sh woopos_tests root '' localhost $WP_VERSION
+  - mkdir /tmp/wordpress/wp-content/plugins/woocommerce-pos/
+  - mv * .[^.]* /tmp/wordpress/wp-content/plugins/woocommerce-pos/
+  - mv /tmp/wordpress/* ./
+  - git clone https://github.com/kilbot/WooCommerce-POS-Test-Theme.git wp-content/themes/WooCommerce-POS-Test-Theme
+  - git clone https://github.com/kilbot/WooCommerce-POS-Test-Plugin.git wp-content/plugins/woocommerce-pos-test
+  # apache
+  - sudo apt-get update
+  - sudo apt-get install apache2 libapache2-mod-fastcgi
+  # enable php-fpm
+  - sudo cp ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf.default ~/.phpenv/versions/$(phpenv version-name)/etc/php-fpm.conf
+  - sudo a2enmod rewrite actions fastcgi alias
+  - echo "cgi.fix_pathinfo = 1" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+  - ~/.phpenv/versions/$(phpenv version-name)/sbin/php-fpm
+  # configure apache virtual hosts
+  - sudo cp -f ./wp-content/plugins/woocommerce-pos/tests/integration/php/bin/travis-ci-apache /etc/apache2/sites-available/default
+  - sudo sed -e "s?%TRAVIS_BUILD_DIR%?$(pwd)?g" --in-place /etc/apache2/sites-available/default
+  - sudo service apache2 restart
+
 before_script:
-    - npm install -g grunt-cli
-    - npm install
-    - bash tests/unit/php/bin/install-wp-tests.sh wordpress_test root '' localhost $WP_VERSION
+  # wp-cli
+  - curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+  - chmod +x wp-cli.phar
+  - sudo mv wp-cli.phar /usr/local/bin/wp
+  - wp --info
+  - wp core config --dbname=woopos_tests --dbuser=root
+  - wp core install --url=woopos.dev --title=WooCommercePOS --admin_user=admin --admin_password=password --admin_email=support@woopos.com.au
+  - wp rewrite structure '/%year%/%monthnum%/%postname%'
+  - wp plugin activate woocommerce-pos
+  - wp plugin activate woocommerce-pos-test
+  - wp plugin install woocommerce --activate
+  - wp plugin install wordpress-importer --activate
+  - wp import wp-content/plugins/woocommerce/dummy-data/dummy-data.xml --authors=create
+  - wp option update woocommerce_api_enabled yes
+  - cp wp-content/plugins/woocommerce-pos/tests/integration/php/bin/wp-cli.yml ./
+  - wp rewrite flush --hard
+  # grunt-cli
+  - cd wp-content/plugins/woocommerce-pos/
+  - npm install -g grunt-cli
+  - npm install
 
 script:
-    - grunt test
-    - phpunit
-#    - ./node_modules/.bin/pioneer
+  - grunt test
+  - phpunit -c phpunit.xml.dist
+  - phpunit -c phpunit.int.xml
+  #    - ./node_modules/.bin/pioneer
+
+after_script:
+  - php vendor/bin/coveralls -v
+  - grunt coverage

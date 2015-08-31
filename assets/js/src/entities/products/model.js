@@ -1,6 +1,7 @@
 var DualModel = require('lib/config/dual-model');
 var _ = require('lodash');
-var Radio = require('backbone.radio');
+var Variations = require('../variations/collection');
+var FilteredCollection = require('lib/config/obscura');
 
 module.exports = DualModel.extend({
   name: 'product',
@@ -8,48 +9,26 @@ module.exports = DualModel.extend({
   // this is an array of fields used by FilterCollection.matchmaker()
   fields: ['title'],
 
-  // the REST API gives string values for some attributes
-  // this can cause confusion, so parse to float
-  parse: function(resp){
-    resp = resp.product || resp;
-    _.each(['price', 'regular_price', 'sale_price'], function(attr){
-      if( _.isString(resp[attr]) ){
-        resp[attr] = parseFloat(resp[attr]);
-      }
+  // data types
+  schema: {
+    price         : 'number',
+    regular_price : 'number',
+    sale_price    : 'number',
+    stock_quantity: 'number'
+  },
+
+  initialize: function(){
+    this.on({
+      'change:updated_at': this.onUpdate
     });
-    return resp;
   },
 
-  /**
-   * Helper functions for variation prices
-   */
-  min: function(attr){
-    var variations = this.get('variations');
-    if(attr === 'sale_price'){
-      variations = _.where(variations, {on_sale: true});
+  onUpdate: function(){
+    // update stock
+    if( this.get('type') === 'variable' ){
+      var variations = this.getVariations().superset();
+      variations.set( this.get('variations') );
     }
-    var attrs = _.pluck(variations, attr);
-    if(attrs.length > 0){
-      return _(attrs).compact().min();
-    }
-    return this.get(attr);
-  },
-
-  max: function(attr){
-    var attrs = _.pluck(this.get('variations'), attr);
-    if(attrs.length > 0){
-      return _(attrs).compact().max();
-    }
-    return this.get(attr);
-  },
-
-  range: function(attr){
-    if(attr === 'sale_price'){
-      var min = _.min([this.min('sale_price'), this.min('price')]);
-      var max = _.max([this.max('sale_price'), this.max('price')]);
-      return _.uniq([min, max]);
-    }
-    return _.uniq([this.min(attr), this.max(attr)]);
   },
 
   /**
@@ -89,12 +68,12 @@ module.exports = DualModel.extend({
 
     }, this);
 
-    if(match){
-      return match;
-    }
+    //if(match){
+    //  return match;
+    //}
 
     // the original matchMaker
-    return callback(tokens, this);
+    return match ? match : callback(tokens, this);
 
   },
 
@@ -125,12 +104,9 @@ module.exports = DualModel.extend({
   },
 
   variableBarcodeMatch: function(test, value){
-    var match, variations = Radio.request('entities', 'get', {
-      type: 'variations',
-      parent: this
-    });
+    var match;
 
-    variations.superset().each(function(variation){
+    this.getVariations().superset().each(function(variation){
       var vtest = variation.get('barcode').toLowerCase();
       if(vtest === value){
         match = variation;
@@ -150,6 +126,53 @@ module.exports = DualModel.extend({
     }
 
     return this.partialBarcodeMatch(test, value);
+  },
+
+  /**
+   * Construct variable options from variation array
+   * - variable.attributes includes all options, including those not used
+   */
+  getVariationOptions: function(){
+    if( this._variationOptions ) {
+      return this._variationOptions;
+    }
+
+    var variations = this.get('variations');
+
+    // pluck all options, eg:
+    // { Color: ['Black', 'Blue'], Size: ['Small', 'Large'] }
+    var result = _.pluck(variations, 'attributes')
+      .reduce(function(result, attrs){
+        _.each(attrs, function(attr){
+          if(result[attr.name]){
+            return result[attr.name].push(attr.option);
+          }
+          result[attr.name] = [attr.option];
+        });
+        return result;
+      }, {});
+
+    // map options with consistent keys
+    this._variationOptions = _.map(result, function(options, name){
+      return {
+        'name': name,
+        'options': _.uniq( options )
+      };
+    });
+
+    return this._variationOptions;
+  },
+
+  /**
+   *
+   */
+  getVariations: function(){
+    if( this.get('type') !== 'variable' ){ return false; }
+    if( ! this._variations ){
+      var variations = new Variations(this.get('variations'), { parent: this });
+      this._variations = new FilteredCollection(variations);
+    }
+    return this._variations;
   }
 
 });

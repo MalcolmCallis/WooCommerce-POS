@@ -1,25 +1,21 @@
 #!/usr/bin/env bash
 
-if [ $# -lt 3 ]; then
-  echo "usage: $0 <db-name> <db-user> <db-pass> [db-host] [wp-version]"
-  exit 1
-fi
-
 DB_NAME=$1
 DB_USER=$2
 DB_PASS=$3
 DB_HOST=${4-localhost}
 WP_VERSION=${5-latest}
 
-WP_TESTS_DIR=${WP_TESTS_DIR-/tmp/wordpress-tests-lib}
+WP_TESTS_DIR=/tmp/wordpress-tests-lib
 WP_CORE_DIR=/tmp/wordpress/
 
 set -ex
 
 install_wp() {
+  rm -rf $WP_CORE_DIR
   mkdir -p $WP_CORE_DIR
 
-  if [ $WP_VERSION == 'latest' ]; then 
+  if [ $WP_VERSION == 'latest' ]; then
     local ARCHIVE_NAME='latest'
   else
     local ARCHIVE_NAME="wordpress-$WP_VERSION"
@@ -40,6 +36,7 @@ install_test_suite() {
   fi
 
   # set up testing suite
+  rm -rf $WP_TESTS_DIR
   mkdir -p $WP_TESTS_DIR
   cd $WP_TESTS_DIR
   svn co --quiet http://develop.svn.wordpress.org/trunk/tests/phpunit/includes/
@@ -70,6 +67,7 @@ install_db() {
   fi
 
   # create database
+  mysqladmin -f drop $DB_NAME --user="$DB_USER" --password="$DB_PASS"
   mysqladmin create $DB_NAME --user="$DB_USER" --password="$DB_PASS"$EXTRA
 }
 

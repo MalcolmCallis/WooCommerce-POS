@@ -18,14 +18,36 @@ var StatusRoute = Route.extend({
     this.collection = options.collection;
     this.setTabLabel({
       tab   : 'right',
-      label : $('#tmpl-pos-status').data('title')
+      label : polyglot.t('titles.system-status')
+    });
+
+    this.ajaxurl = Radio.request('entities', 'get', {
+      type: 'option',
+      name: 'ajaxurl'
+    });
+
+    this.nonce = Radio.request('entities', 'get', {
+      type: 'option',
+      name: 'nonce'
     });
   },
 
   fetch: function(){
     // if not fetched, need to fetch all local records
     var fetched = _.map(this.databases, this.fetchDB, this);
+    // add the server tests
+    fetched.push( this._fetch() );
     return $.when.apply($, fetched);
+  },
+
+  _fetch: function(){
+    var self = this;
+    return $.getJSON( this.ajaxurl, {
+      action: 'wc_pos_system_status',
+      security: this.nonce
+    }, function( resp ){
+      self.tests = resp;
+    });
   },
 
   render: function(){
@@ -39,14 +61,14 @@ var StatusRoute = Route.extend({
   },
 
   showStatus: function(){
-    this.collection.reset();
-    this.collection.add( this.storageStatus() );
-
     var view = new Status({
-      collection: this.collection
+      tests: this.tests,
+      storage: this.storageStatus()
     });
 
-    this.listenTo(view, 'action:clear', this.clearDB);
+    this.listenTo(view, {
+      'action:clear'  : this.clearDB
+    });
 
     this.layout.getRegion('status').show( view );
   },
@@ -82,10 +104,8 @@ var StatusRoute = Route.extend({
     var collection = this[db],
         self = this;
 
-    collection.db.clear()
+    collection.clear()
       .then(function(){
-        collection.reset();
-        collection.queue = [];
         self.render();
       });
   }

@@ -1,6 +1,7 @@
 # [WooCommerce POS](http://woopos.com.au) 
 [![Build Status](https://travis-ci.org/kilbot/WooCommerce-POS.svg)](https://travis-ci.org/kilbot/WooCommerce-POS) 
 [![Code Climate](https://codeclimate.com/github/kilbot/WooCommerce-POS/badges/gpa.svg)](https://codeclimate.com/github/kilbot/WooCommerce-POS)
+[![Coverage Status](https://coveralls.io/repos/kilbot/WooCommerce-POS/badge.svg)](https://coveralls.io/r/kilbot/WooCommerce-POS)
 [![Dependency Status](https://david-dm.org/kilbot/WooCommerce-POS.svg)](https://david-dm.org/kilbot/WooCommerce-POS)
 
 Development repository for WooCommerce POS - the Point of Sale plugin for [WooCommerce](http://woothemes.com/woocommerce/).
@@ -16,7 +17,7 @@ Development repository for WooCommerce POS - the Point of Sale plugin for [WooCo
 ## Browser Compatibility
 
 <p align="center">
-  <img src="https://woopos.com.au/wp-content/uploads/2015/05/compatibility-chart.jpg" alt="Browser Compatibility"/>
+  <img src="https://woopos.com.au/wp-content/uploads/2015/06/compatibility-chart.jpg" alt="Browser Compatibility"/>
 </p>
 
 Browser testing by [BrowserStack](http://browserstack.com).

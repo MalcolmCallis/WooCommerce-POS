@@ -35,7 +35,7 @@ var Item = ItemView.extend({
 
   addToCart: function(e){
     e.preventDefault();
-    Radio.command('router', 'add:to:cart', {model: this.model});
+    Radio.request('router', 'add:to:cart', {model: this.model});
   },
 
   variationsPopover: function(e){
@@ -47,7 +47,7 @@ var Item = ItemView.extend({
 
     this.listenTo(view, 'add:to:cart', function(args){
       var product = args.collection.models[0].toJSON();
-      Radio.command('router', 'add:to:cart', product);
+      Radio.request('router', 'add:to:cart', product);
       Radio.request('popover', 'close');
     });
 
@@ -65,11 +65,11 @@ var Item = ItemView.extend({
     e.preventDefault();
     var options = {};
 
-    var slug = $(e.target).data('variation');
-    if(slug){
+    var name = $(e.target).data('name');
+    if(name){
       options.filter = {
-        slug: slug,
-        option: $(e.target).data('value')
+        name: name,
+        option: $(e.target).text()
       };
     }
 
@@ -77,13 +77,13 @@ var Item = ItemView.extend({
   },
 
   templateHelpers: function(){
-    var data = {};
-    if(this.model.get('type') === 'variable'){
-      data.price = this.model.range('price');
-      data.sale_price = this.model.range('sale_price');
-      data.regular_price = this.model.range('regular_price');
-      data.product_variations = this.model.productVariations();
-    }
+    var variations = this.model.getVariations();
+    var data = variations ? {
+      price: variations.superset().range('price'),
+      sale_price: variations.superset().range('sale_price'),
+      regular_price: variations.superset().range('regular_price'),
+      product_variations: this.model.getVariationOptions()
+    } : {} ;
     data.product_attributes = this.model.productAttributes();
     return data;
   }

@@ -8,7 +8,7 @@
   verbose="true"
   >
   <testsuites>
-    <testsuite name="WooCommerce POS Test Suite">
+    <testsuite name="WooCommerce POS Unit Tests">
       <directory prefix="test-" suffix=".php">./tests/unit/php/spec/</directory>
     </testsuite>
   </testsuites>

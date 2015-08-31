@@ -1,7 +1,7 @@
 var DeepModel = require('./deep-model');
 var POS = require('lib/utilities/global');
 var _ = require('lodash');
-//var debug = require('debug')('dualModel');
+var debug = require('debug')('dualModel');
 
 module.exports = POS.DualModel = DeepModel.extend({
   idAttribute: 'local_id',
@@ -31,6 +31,7 @@ module.exports = POS.DualModel = DeepModel.extend({
 
   // delayed states
   states: {
+    //'patch'  : 'UPDATE_FAILED',
     'update' : 'UPDATE_FAILED',
     'create' : 'CREATE_FAILED',
     'delete' : 'DELETE_FAILED'
@@ -55,10 +56,11 @@ module.exports = POS.DualModel = DeepModel.extend({
     options = options || {};
     var opts = _.clone(options);
     opts.remote = undefined;
+    var m = method === 'patch' ? 'update' : method;
 
-    this.setStatus(method);
+    this.setStatus(m);
 
-    return DeepModel.prototype.sync.call(this, method, model, opts)
+    return DeepModel.prototype.sync.call(this, m, model, opts)
       .then(function(){
         if(options.remote){
           return model.remoteSync(method, model, options);
@@ -70,9 +72,8 @@ module.exports = POS.DualModel = DeepModel.extend({
     model = model || this;
     options = options || {};
     options.remote = true;
-    if(method !== 'read'){
-      method = model.getMethod(method);
-    }
+    method = method || model.getMethod();
+
     return DeepModel.prototype.sync.call(this, method, model, options)
       .then(function(resp){
         if(resp){
@@ -91,15 +92,16 @@ module.exports = POS.DualModel = DeepModel.extend({
     }
   },
 
-  getMethod: function(method){
+  getMethod: function(){
     var status = this.get('status');
     var remoteMethod = _.findKey(this.states, function(state) {
       return state === status;
     });
     if(remoteMethod){
       return remoteMethod;
+    } else {
+      debug('No method given for remote sync');
     }
-    return method;
   },
 
   merge: function(resp){

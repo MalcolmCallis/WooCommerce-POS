@@ -11,7 +11,7 @@ var Radio = require('backbone.radio');
 module.exports = POS.IndexedDBCollection = Collection.extend({
   name          : 'store',
   storePrefix   : 'wc_pos_',
-  dbVersion     : 1,
+  dbVersion     : POS.VERSION,
   keyPath       : 'local_id',
   autoIncrement : true,
   indexes       : [
@@ -35,11 +35,21 @@ module.exports = POS.IndexedDBCollection = Collection.extend({
           status: error.target.error.name,
           message: error.target.error.message
         });
+      },
+      onVersionChange: function(store){
+        store.clear();
       }
     };
 
     this.db = new IndexedDB(options, this);
-    this.db.open();
+    this.db.open()
+      // error opening db
+      .fail(function(error){
+        Radio.trigger('global', 'error', {
+          status    : 'indexedDB error',
+          message   : error
+        });
+      });
   },
 
   merge: function(models){
@@ -48,6 +58,22 @@ module.exports = POS.IndexedDBCollection = Collection.extend({
       .then(function(){
         var models = Array.prototype.slice.apply(arguments);
         return self.add(models, {merge: true});
+      });
+  },
+
+  /**
+   * Clears the IDB storage and resets the collection
+   */
+  clear: function(){
+    if(!this.db){
+      return;
+    }
+
+    var self = this;
+    return this.db.open()
+      .then(function(){
+        self.reset();
+        return self.db.clear();
       });
   }
 

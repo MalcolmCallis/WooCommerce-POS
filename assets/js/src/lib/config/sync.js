@@ -20,6 +20,7 @@ bb.$.ajaxSetup({
       });
     }
   },
+  // for straight jquery ajax calls
   beforeSend: function(xhr){
     xhr.setRequestHeader('X-WC-POS', 1);
   },
@@ -42,5 +43,8 @@ bb.sync = function(method, entity, options) {
     return bb.idbSync.apply(this, [method, entity, options]);
   }
   // server
+  options.beforeSend = function(xhr){
+    xhr.setRequestHeader('X-WC-POS', 1);
+  };
   return bb.ajaxSync.apply(this, [method, entity, options]);
 };
